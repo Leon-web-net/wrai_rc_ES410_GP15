@@ -1,44 +1,26 @@
 #include <Arduino.h>
-#include <QuadratureEncoder.h>
-#include "bts7960.h"
+#include "encoderpwr.h"
+#include "bts7960pwr.h"
 #include "pid.h"
+#include "pins.h"
 
-// Motor driver pins
-#define L_EN_1 7   // Left motor enable
-#define R_EN_1 8   // Right motor enable
-#define RPWM_1 5   // Right motor PWM
-#define LPWM_1 6   // Left motor PWM
-
-#define L_EN_2 9   // Second front motor enable
-#define R_EN_2 10  // Second front motor enable
-#define RPWM_2 11  // Second front motor PWM
-#define LPWM_2 12  // Second front motor PWM
-
-// Steering motor driver pins
-#define L_EN_STEER 4   // Steering motor enable
-#define R_EN_STEER 3
-#define RPWM_STEER 2
-#define LPWM_STEER 13
-
-// Encoder pins
-#define ENC_A 2
-#define ENC_B 3
-#define ENC_STEER_A 18  // Steering encoder
-#define ENC_STEER_B 19
 
 // PID variables
 double Kp = 2, Ki = 5, Kd = 1;
 
 // Motor and encoder objects
-Encoders encoder(ENC_A, ENC_B);
-Encoders encoderSteer(ENC_STEER_A, ENC_STEER_B);
-BTS7960 motor1(L_EN_1, R_EN_1, LPWM_1, RPWM_1);
-BTS7960 motor2(L_EN_2, R_EN_2, LPWM_2, RPWM_2);
-BTS7960 steerMotor(L_EN_STEER, R_EN_STEER, LPWM_STEER, RPWM_STEER);
+//EncodersPwr lenc( ENCA_PWR, ENCA_GND, ENCA_A, ENCA_B );
+//EncodersPwr renc( ENCB_PWR, ENCB_GND, ENCB_A, ENCB_B );
+//EncodersPwr senc( ENCC_PWR, ENCC_GND, ENCC_A, ENCC_B );
 
+BTS7960Pwr lmotor( MTRA_PWR, MTRA_GND, MTRA_LEN, MTRA_REN, MTRA_LPWM, MTRA_RPWM );
+BTS7960Pwr rmotor( MTRB_PWR, MTRB_GND, MTRB_LEN, MTRB_REN, MTRB_LPWM, MTRB_RPWM );
+BTS7960Pwr smotor( MTRC_PWR, MTRC_GND, MTRC_LEN, MTRC_REN, MTRC_LPWM, MTRC_RPWM );
 // Constants
 const float ticks = 64.f;
-const float gear_ratio = (67.f / 12.f * 54.f / 8.f * 51.f / 10.f * ticks) / 360.f;
+const float ratio = (64.f / 12.f * 55.f / 8.f * 43.f / 10.f * ticks) / 360.f;
+
+int count = 0;
 
 // State variables
 int steer_setpoint = 0; // Desired steering angle
@@ -48,74 +30,72 @@ void setup() {
     Serial.begin(9600);
     Serial.println("Setup");
 
-    // Set pin high to power the encoder board
-    pinMode(12, OUTPUT);
-    digitalWrite(12, HIGH);
-    steer_setpoint = 180 * ratio;
-    motor_setpoint = 180 * ratio;
+    lmotor.setSpeed(0);
+    rmotor.setSpeed(0);
+    smotor.setSpeed(0);
+
+    pinMode( ENCC_A, INPUT );
 }
 
-int calculate( long setpoint, long position )
-{
-  const long ticks = encoder.getEncoderCount();
-  long error = setpoint - ticks;
-  long proportional = Kp * error;
-  long pwm = constrain( proportional, -255, 255 );
+// int calculate( long setpoint, long position )
+// {
+//   const long ticks = encoder.getEncoderCount();
+//   long error = setpoint - ticks;
+//   long proportional = Kp * error;
+//   long pwm = constrain( proportional, -255, 255 );
 
-  return abs( error ) < 10 ? 0 : pwm;
-}
+//   return abs( error ) < 10 ? 0 : pwm;
+// }
 
 void loop() {
     // Read user input from Serial
     static String buffer;
-    while (Serial.available()) {
-        char c = Serial.read();
-        if (c == '\n') {
-            // Expecting input format: "steer_angle motor_speed"
-            int spaceIndex = buffer.indexOf(' ');
-            if (spaceIndex != -1) {
-                // Parse values from serial input
-                steer_setpoint = buffer.substring(0, spaceIndex).toInt();
-                motor_setpoint = buffer.substring(spaceIndex + 1).toInt();
-            }
-            buffer = "";
-        } else {
-            buffer += c;
-        }
-    }
-
-    // Convert inputs to encoder values
-    int steer_target = steer_setpoint * gear_ratio;
-    int motor_target = motor_setpoint * gear_ratio;
-
-    // Apply control to motors
-    motor1.setSpeed(calculate(motor_target, encoder.getEncoderCount()));
-    motor2.setSpeed(calculate(motor_target, encoder.getEncoderCount())); // Sync both front motors
-    steerMotor.setSpeed(calculate(steer_target, encoderSteer.getEncoderCount()));
-
-    // Print debug info every 1 second
+    static uint8_t l = 0, r = 0, s = 0;
     static unsigned long watchdog = 0;
-    const unsigned long duration = 1000;
-    unsigned long now = millis();
+    const unsigned long timeout = 1000;
 
+    Serial.println( digitalRead( ENCC_A ));
 
+    
+    /*lmotor.setSpeed(count-255);
+    rmotor.setSpeed(count-255);
+    smotor.setSpeed(count-255);
+    count = (count+1)%(255*2);
+    delay(10);*/
+    // while (Serial.available()) {
+    //     char c = Serial.read();
+    //     if (c == '\n') {
+    //         // Expecting input format: "l r s"
+    //         int firstSpaceIndex = buffer.indexOf(' ');
+    //         int secondSpaceIndex = buffer.indexOf(' ', firstSpaceIndex + 1);
+    //         if (firstSpaceIndex != -1 && secondSpaceIndex != -1) {
+    //             // Parse values from serial input
+    //             l = buffer.substring(0, firstSpaceIndex).toInt();
+    //             r = buffer.substring(firstSpaceIndex + 1, secondSpaceIndex).toInt();
+    //             s = buffer.substring(secondSpaceIndex + 1).toInt();
+    //         }
+    //         buffer = "";
 
-    if (now >= watchdog) {
-        Serial.print("Steer Setpoint: ");
-        Serial.println(steer_setpoint);
-        Serial.print("Steer Encoder: ");
-        Serial.println(encoderSteer.getEncoderCount());
+    //         watchdog = millis() + timeout;
+    //         lmotor.setSpeed(l);
+    //         rmotor.setSpeed(r);
+    //         smotor.setSpeed(s);
+    //     } else {
+    //         buffer += c;
+    //     }
+    // }
 
-        Serial.print("Motor Setpoint: ");
-        Serial.println(motor_setpoint);
-        Serial.print("Motor Encoder: ");
-        Serial.println(encoder.getEncoderCount());
+    // Read encoder values
+/*    Serial.print( lenc.getEncoderCount() );
+    Serial.print( ' ' );
+    Serial.print( renc.getEncoderCount() );
+    Serial.print( ' ' );
+    Serial.println( senc.getEncoderCount() );*/
 
-        watchdog = now + duration;
-    }
-
-    if( abs( encoder.getEncoderCount() - setpoint ) < 10 )
-    {
-      setpoint *= -1;
-    }
+    // // Check if watchdog timer has expired
+    // if (millis() > watchdog) {
+    //     lmotor.setSpeed(0);
+    //     rmotor.setSpeed(0);
+    //     smotor.setSpeed(0);
+    // }
 }
