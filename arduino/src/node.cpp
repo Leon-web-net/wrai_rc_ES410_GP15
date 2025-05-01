@@ -129,7 +129,7 @@ void loop()
             0.5s in the future */
         case UNCALIBRATED:
         {
-            Serial.println( "Uncalibrated" );
+            //Serial.println( "Uncalibrated" );
             maxEnc = senc.getEncoderCount();
             sm.state( LEFT );
             break;
@@ -139,7 +139,7 @@ void loop()
             values are found */
         case LEFT:
         {
-            Serial.println( "Left" );
+            //Serial.println( "Left" );
             _s = 255;
 
             const long enc = senc.getEncoderCount();
@@ -159,7 +159,7 @@ void loop()
         }
         case RIGHT:
         {
-            Serial.println( "Right" );
+            //Serial.println( "Right" );
             _s = -255;
 
             const long enc = senc.getEncoderCount();
@@ -179,7 +179,7 @@ void loop()
 
         case CENTER:
         {
-            Serial.println( "Center" );
+            //Serial.println( "Center" );
             const int midpoint = (maxEnc + minEnc) / 2;
             const int error = midpoint - senc.getEncoderCount();
             _s = error *2;
@@ -193,7 +193,7 @@ void loop()
 
         case CALIBRATED:
         {
-            Serial.println( "Calibrated" );
+            //Serial.println( "Calibrated" );
             if( sm.duration() > 1000 )
             {
                 sm.state( ACTIVE );
@@ -221,7 +221,7 @@ void loop()
         }
     }
 
-    lmotor.setSpeed( _l );
-    rmotor.setSpeed( _r );
+    lmotor.setSpeed( -_l );
+    rmotor.setSpeed( -_r );
     smotor.setSpeed( _s );
 }
