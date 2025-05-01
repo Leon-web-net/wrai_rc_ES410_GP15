@@ -14,16 +14,16 @@
 
 #define ENCC_PWR 22
 #define ENCC_GND 23
-#define ENCC_A   20 // hardware interrupt
-#define ENCC_B   21 // hardware interrupt
+#define ENCC_A   21 // hardware interrupt
+#define ENCC_B   20 // hardware interrupt
 
 // motor driver pins
 #define MTRA_PWR  26
 #define MTRA_GND  27
-#define MTRA_LEN  28
-#define MTRA_REN  29
-#define MTRA_LPWM  8 // pwm
-#define MTRA_RPWM  9 // pwm
+#define MTRA_REN  28
+#define MTRA_LEN  29
+#define MTRA_RPWM  8 // pwm
+#define MTRA_LPWM  9 // pwm
 #define MTRA_LIS  30
 #define MTRA_RIS  31
 
