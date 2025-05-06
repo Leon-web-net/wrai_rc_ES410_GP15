@@ -1,3 +1,15 @@
+""" Starting the real vehicle requires multiple steps.
+    The RC driver emulates those steps that are required for the 
+    real vehicle using ROS services.
+    This launch file steps through the startup sequence of the vehicle.
+
+    1. Power on the vehicle
+    2. Select the mission
+    3. Toggle the grossfunk
+    4. Vehicle is ready to drive
+"""
+
+
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, ExecuteProcess, GroupAction, LogInfo, OpaqueFunction, RegisterEventHandler
 from launch.event_handlers import OnProcessExit
