@@ -5,7 +5,7 @@
 #include "state_manager.h"
 
 // editable parameters
-const int statusHz = 50;
+const int statusHz = 100;
 const int watchdogMs = 1000;
 
 // global variables
@@ -40,7 +40,7 @@ BTS7960Pwr smotor( MTRC_PWR, MTRC_GND, MTRC_LEN, MTRC_REN, MTRC_LPWM, MTRC_RPWM 
 
 void setup() 
 {
-    Serial.begin(9600);
+    Serial.begin(115200);
 }
 
 void send_status()
