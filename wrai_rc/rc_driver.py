@@ -188,13 +188,31 @@ class RcDriver(Node):
 
     def __serial_callback(self):
         # connect to serial if needed
+        """
         if self.__serial is None:
             try:
-                self.__serial = serial.Serial('/dev/ttyACM0', 9600)
+                self.__serial = serial.Serial('/dev/ttyACM1', 9600)
             except serial.serialutil.SerialException as e:
                 self.get_logger().error(f"{e}",throttle_duration_sec=3)
                 return
-            
+        """
+        
+        try:
+            if self.__serial is None:
+                self.get_logger().info("Attempting to reconnect")
+                self.__serial = serial.Serial('/dev/ttyACM1', 9600)
+
+                # temp bodge to reset the arduino on each connection
+                self.__serial.dtr = 1
+                import time
+                time.sleep( 1 )
+            else:
+                self.__serial.dtr = 0
+        except serial.serialutil.SerialException as e:
+            self.get_logger().error(f"{e}",throttle_duration_sec=3)
+            return
+        self.get_logger().info( f"waiting {self.__serial.in_waiting}")
+
         # read serial data
         if self.__serial.in_waiting > 0:
             self.__buffer += self.__serial.read(self.__serial.in_waiting)
@@ -202,6 +220,8 @@ class RcDriver(Node):
             self.__buffer = packets[-1]
 
             for packet in packets[:-1]:
+
+                self.get_logger().info( f"serial recv {packet}")
                 try:
                     self.get_logger().info( packet.decode() )
                     mn, mx, self.__lenc, self.__renc, self.__senc = ( int(i) for i in packet.decode().split(" "))
@@ -232,7 +252,7 @@ class RcDriver(Node):
         self.get_logger().info(f"Sending: {l} {r} {s}")
 
         # steering +CCW, -CW
-        self.__serial.write(f'{l} {r} {s}\n'.encode())
+        self.__serial.write(f'{int(l)} {int(r)} {int(s)}\n'.encode())
 
 
 def main(args=None):
