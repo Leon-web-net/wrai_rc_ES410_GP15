@@ -26,6 +26,9 @@ class Calibration:
         if self.__mn is None or self.__mx is None:
             return None
         return (self.__mn + self.__mx) / 2
+    
+    def convert(self, ideal):
+        return min( self.__mx, max( self.__mn, ideal + self.midpoint() ) )
 
 class RcDriver(Node):
     def __init__(self):
@@ -45,6 +48,10 @@ class RcDriver(Node):
         self.__brake = 0
         self.__rpm = 0
         self.__lenc, self.__renc, self.__senc = 0, 0, 0
+
+        # convert steering angle to encoder ticks, conversion is doing using a polynomial
+        # generated from the calibration data enc = [0] + ( ang * [1] ) + ( ang * [2]**2 ) + ( ang * [3]**3 )
+        self.__steerpoly = (2.252428829, 3001.47924, 465.8237052, 7981.656532)
 
         # create services
         self.create_service(fsai_messages.srv.Mission, '~/mission', self.__mission_callback)
@@ -137,7 +144,9 @@ class RcDriver(Node):
         status.header.stamp = self.get_clock().now().to_msg()
 
         if self.__as_state == fsai_messages.msg.Status.AS_DRIVING:
-            status.steering_angle = float(self.__senc)
+            #status.steering_angle = float(self.__senc)
+            status.steering_angle = float( (self.__senc - self.__steerpoly[0]) / (
+                self.__steerpoly[1] + self.__steerpoly[2]**2 + self.__steerpoly[3]**3 ) ) 
             status.f_brake = float(0)
             status.r_brake = float(0)
             status.fl_rpm = float(0)
@@ -154,9 +163,16 @@ class RcDriver(Node):
         self.pub_.publish( status )
    
     def __ctrl_callback(self, message):
-        self.get_logger().info(f"Received control message: {message}")
+        #self.get_logger().info(f"Received control message: {message}")
 
+        # convert steering angle to encoder ticks, conversion is doing using a polynomial
+        # generated from the calibration data 
+        #self.__steer = self.__steerpoly[0] + \
+        #    message.steer_angle * self.__steerpoly[1] + \
+        #    message.steer_angle * self.__steerpoly[2]**2 + \
+        #    message.steer_angle * self.__steerpoly[3]**3
         self.__steer = message.steer_angle
+
         self.__brake = ( message.brake_press_f + message.brake_press_r ) /2
 
         # fsai_messages.Ctrl supports two drive modes, NORMAL and NORMAL_MS
@@ -199,8 +215,9 @@ class RcDriver(Node):
         
         try:
             if self.__serial is None:
-                self.get_logger().info("Attempting to reconnect")
-                self.__serial = serial.Serial('/dev/ttyACM1', 9600)
+                device = "/dev/serial/by-id/usb-Arduino__www.arduino.cc__0042_4343935353635181F082-if00"
+                self.get_logger().info("Attempting to reconnect",throttle_duration_sec=3)
+                self.__serial = serial.Serial(device, 115200)
 
                 # temp bodge to reset the arduino on each connection
                 self.__serial.dtr = 1
@@ -211,7 +228,7 @@ class RcDriver(Node):
         except serial.serialutil.SerialException as e:
             self.get_logger().error(f"{e}",throttle_duration_sec=3)
             return
-        self.get_logger().info( f"waiting {self.__serial.in_waiting}")
+        #self.get_logger().info( f"waiting {self.__serial.in_waiting}")
 
         # read serial data
         if self.__serial.in_waiting > 0:
@@ -221,7 +238,7 @@ class RcDriver(Node):
 
             for packet in packets[:-1]:
 
-                self.get_logger().info( f"serial recv {packet}")
+                #self.get_logger().info( f"serial recv {packet}")
                 try:
                     self.get_logger().info( packet.decode() )
                     mn, mx, self.__lenc, self.__renc, self.__senc = ( int(i) for i in packet.decode().split(" "))
@@ -238,14 +255,19 @@ class RcDriver(Node):
         # default to doing nothing
         l, r, s = 0, 0, 0
 
+        #self.get_logger().info( self.__steer )
+
+        # currently having issues with encoders, so temporarily disabling and switching to directly passing steering voltages
         if self.__steer is not None:
-            # based on latest encoder data, calculate the control values for steering
-            kp = 0.35
-            scurrent = self.__senc - self.__calibrate.midpoint()
-            serror = self.__steer - scurrent
-            s = serror * kp
-            self.get_logger().info( f"steer {self.__calibrate.midpoint()} {self.__senc} {scurrent} {self.__steer} {serror} {s}" )
-            
+            s = self.__steer * 1000
+        
+        #    # based on latest encoder data, calculate the control values for steering
+        #    kp = 1.0
+#
+        #    # self.__steer is an idealised encoder value that assumes that 0 is the midpoint, adjust to reality
+        #    target = self.__calibrate.convert( self.__steer )
+        #    error = target - self.__senc
+        #    s = error * kp
 
         l = r = self.__rpm
 
@@ -253,6 +275,7 @@ class RcDriver(Node):
 
         # steering +CCW, -CW
         self.__serial.write(f'{int(l)} {int(r)} {int(s)}\n'.encode())
+        self.get_logger().info(f"Sent: {int(l)} {int(r)} {int(s)}")
 
 
 def main(args=None):
