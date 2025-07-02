@@ -29,8 +29,9 @@ enum Watchdog
 };
 
 // Motor and encoder objects
-EncodersPwr lenc( ENCA_PWR, ENCA_GND, ENCA_A, ENCA_B );
-EncodersPwr renc( ENCB_PWR, ENCB_GND, ENCB_A, ENCB_B );
+// lenc and renc and disabled while we test possible interrupt handling limitations
+//EncodersPwr lenc( ENCA_PWR, ENCA_GND, ENCA_A, ENCA_B ); 
+//EncodersPwr renc( ENCB_PWR, ENCB_GND, ENCB_A, ENCB_B );
 EncodersPwr senc( ENCC_PWR, ENCC_GND, ENCC_A, ENCC_B );
 
 BTS7960Pwr lmotor( MTRA_PWR, MTRA_GND, MTRA_LEN, MTRA_REN, MTRA_LPWM, MTRA_RPWM );
@@ -55,7 +56,7 @@ void send_status()
 
     statusTimer += statusInterval;
     
-    Serial.print( minEnc );
+    /*Serial.print( minEnc );
     Serial.print( ' ' );
     Serial.print( maxEnc );
     Serial.print( ' ' );
@@ -63,45 +64,72 @@ void send_status()
     Serial.print( ' ' );
     Serial.print( renc.getEncoderCount() );
     Serial.print( ' ' );
-    Serial.println( senc.getEncoderCount() );
+    Serial.println( senc.getEncoderCount() );*/
+    // Use a single buffer to format the status message, then send it in one Serial.write
+    char buf[64];
+    const long temp = 0;
+    int len = snprintf(buf, sizeof(buf), "%d %d %ld %ld %ld\n",
+        minEnc, maxEnc,
+        temp, //lenc.getEncoderCount(),
+        temp, //renc.getEncoderCount(),
+        senc.getEncoderCount()
+    );
+    Serial.write(buf, len);
 }
 
-bool __get_serial()
+bool process_serial(const int maxIterations = 50)
 {
-    static String buffer;
-    const char c = Serial.read();
-    // complete message
-    if( c == '\n' ) 
-    {
-        // Expecting input format: "l r s"
-        int firstSpaceIndex = buffer.indexOf(' ');
-        int secondSpaceIndex = buffer.indexOf(' ', firstSpaceIndex + 1);
-        if (firstSpaceIndex != -1 && secondSpaceIndex != -1) {
-            // Parse values from serial input
-            l = buffer.substring(0, firstSpaceIndex).toInt();
-            r = buffer.substring(firstSpaceIndex + 1, secondSpaceIndex).toInt();
-            s = buffer.substring(secondSpaceIndex + 1).toInt();
-        }
-        buffer = "";
-
-        return true;
-    } 
-    else 
-    {
-        buffer += c;
-    }
-
-    return false;
-}
-
-bool process_serial( const int maxIterations = 50 )
-{   
+    static char buffer[1024];
+    static char* idx = buffer;
     bool ret = false;
 
-    // while serial is available but no blocking loops
-    for( int i=0; i!=maxIterations && Serial.available(); ++i )
+    int avail = Serial.available();
+
+    while (avail > 0)
     {
-        ret = ret || __get_serial();
+        int spaceLeft = sizeof(buffer) - (idx - buffer) - 1; // Reserve space for null terminator
+
+        // If buffer is full and no newline, reset buffer
+        if (spaceLeft <= 0)
+        {
+            idx = buffer;
+            buffer[0] = '\0';
+            spaceLeft = sizeof(buffer) - 1;
+        }
+
+        // Read available bytes into the buffer
+        // Ensure we do not read more than the available space in the buffer
+        int toRead = (spaceLeft < avail) ? spaceLeft : avail;
+        int bytesRead = Serial.readBytes(idx, toRead);
+        avail -= bytesRead;
+        idx += bytesRead;
+        *idx = '\0';
+
+        // Process all complete lines in the buffer
+        char* start = buffer;
+        char* newline;
+        while ((newline = strchr(start, '\n')) != nullptr)
+        {
+            *newline = '\0'; // Null-terminate the current line
+            int _l = 0, _r = 0, _s = 0;
+            if (sscanf(start, "%d %d %d", &_l, &_r, &_s) == 3)
+            {
+                l = _l;
+                r = _r;
+                s = _s;
+                ret = true; // At least one complete message processed
+            }
+            start = newline + 1;
+        }
+
+        // Move any remaining partial line to the start of the buffer
+        int remaining = idx - start;
+        if (remaining > 0 && start != buffer)
+        {
+            memmove(buffer, start, remaining);
+        }
+        idx = buffer + remaining;
+        buffer[remaining] = '\0';
     }
 
     return ret;
@@ -129,7 +157,7 @@ void loop()
             0.5s in the future */
         case UNCALIBRATED:
         {
-            //Serial.println( "Uncalibrated" );
+            Serial.println( "Uncalibrated" );
             maxEnc = senc.getEncoderCount();
             sm.state( LEFT );
             break;
@@ -139,7 +167,7 @@ void loop()
             values are found */
         case LEFT:
         {
-            //Serial.println( "Left" );
+            Serial.println( "Left" );
             _s = 255;
 
             const long enc = senc.getEncoderCount();
@@ -159,7 +187,7 @@ void loop()
         }
         case RIGHT:
         {
-            //Serial.println( "Right" );
+            Serial.println( "Right" );
             _s = -255;
 
             const long enc = senc.getEncoderCount();
@@ -179,7 +207,7 @@ void loop()
 
         case CENTER:
         {
-            //Serial.println( "Center" );
+            Serial.println( "Center" );
             const int midpoint = (maxEnc + minEnc) / 2;
             const int error = midpoint - senc.getEncoderCount();
             _s = error *2;
@@ -193,7 +221,7 @@ void loop()
 
         case CALIBRATED:
         {
-            //Serial.println( "Calibrated" );
+            Serial.println( "Calibrated" );
             if( sm.duration() > 1000 )
             {
                 sm.state( ACTIVE );
