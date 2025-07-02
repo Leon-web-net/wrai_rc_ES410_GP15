@@ -165,14 +165,7 @@ class RcDriver(Node):
     def __ctrl_callback(self, message):
         #self.get_logger().info(f"Received control message: {message}")
 
-        # convert steering angle to encoder ticks, conversion is doing using a polynomial
-        # generated from the calibration data 
-        self.__steer = self.__steerpoly[0] + \
-            message.steer_angle * self.__steerpoly[1] + \
-            message.steer_angle * self.__steerpoly[2]**2 + \
-            message.steer_angle * self.__steerpoly[3]**3
-        #self.__steer = message.steer_angle
-
+        self.__steer = message.steer_angle
         self.__brake = ( message.brake_press_f + message.brake_press_r ) /2
 
         # fsai_messages.Ctrl supports two drive modes, NORMAL and NORMAL_MS
@@ -259,7 +252,7 @@ class RcDriver(Node):
 
         # currently having issues with encoders, so temporarily disabling and switching to directly passing steering voltages
         if self.__steer is not None:
-            s = self.__steer * 1000
+            s = self.__steer
         
             # based on latest encoder data, calculate the control values for steering
             kp = 1.0
