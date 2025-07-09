@@ -10,6 +10,7 @@ import serial
 import enum
 import math
 import datetime
+import time
 
 WHEEL_DIAMETER_INCH = 20
 WHEEL_DIAMETER = WHEEL_DIAMETER_INCH * 0.0254
@@ -29,6 +30,9 @@ class Calibration:
     
     def convert(self, ideal):
         return min( self.__mx, max( self.__mn, ideal + self.midpoint() ) )
+
+    def __str__(self):
+        return f"{self.__mn} {self.__mx} {self.midpoint()}"
 
 class RcDriver(Node):
     def __init__(self):
@@ -59,6 +63,11 @@ class RcDriver(Node):
         self.create_service(fsai_messages.srv.Power, "~/power", self.__pwr_callback)
 
         self.__statusTimer = self.create_timer(0.05, self.__status_publish)
+
+        self.declare_parameter('port', '/dev/ttyUSB0')
+        self.__port = self.get_parameter('port').get_parameter_value().string_value
+
+
 
         # tf broadcast
         #self.__tfBroadcaster = tf2_ros.TransformBroadcaster(self)
@@ -208,13 +217,12 @@ class RcDriver(Node):
         
         try:
             if self.__serial is None:
-                device = "/dev/serial/by-id/usb-Arduino__www.arduino.cc__0042_4343935353635181F082-if00"
-                self.get_logger().info("Attempting to reconnect",throttle_duration_sec=3)
-                self.__serial = serial.Serial(device, 115200)
+                self.get_logger().info(f"Attempting to reconnect to {self.__port}",throttle_duration_sec=3)
+                self.__serial = serial.Serial(self.__port, 115200)
 
                 # temp bodge to reset the arduino on each connection
                 self.__serial.dtr = 1
-                import time
+
                 time.sleep( 1 )
             else:
                 self.__serial.dtr = 0
@@ -230,8 +238,6 @@ class RcDriver(Node):
             self.__buffer = packets[-1]
 
             for packet in packets[:-1]:
-
-                #self.get_logger().info( f"serial recv {packet}")
                 try:
                     #self.get_logger().info( packet.decode() )
                     mn, mx, self.__lenc, self.__renc, self.__senc = ( int(i) for i in packet.decode().split(" "))
@@ -252,16 +258,20 @@ class RcDriver(Node):
 
         # currently having issues with encoders, so temporarily disabling and switching to directly passing steering voltages
         if self.__steer is not None:
-            s = self.__steer
-        
             # based on latest encoder data, calculate the control values for steering
             kp = 1.0
             limit = 127
-#
+
+            enc = self.__steerpoly[0] + \
+                (self.__steer * self.__steerpoly[1]) + \
+                (self.__steer**2 * self.__steerpoly[2]) + \
+                (self.__steer**3 * self.__steerpoly[3])
+
             # self.__steer is an idealised encoder value that assumes that 0 is the midpoint, adjust to reality
-            target = self.__calibrate.convert( self.__steer )
+            target = self.__calibrate.convert( enc )
             error = target - self.__senc
             s = error * kp
+            self.get_logger().info(f"Steer calc {target} {error} {s}")
             s = max(-limit, min(limit, s))
 
         l = r = self.__rpm
