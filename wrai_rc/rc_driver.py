@@ -5,6 +5,7 @@ import rclpy.logging
 import tf2_ros
 import fsai_messages.msg
 import fsai_messages.srv
+import std_msgs.msg
 
 import serial
 import enum
@@ -39,6 +40,7 @@ class RcDriver(Node):
         super().__init__('rc_driver')
 
         self.pub_ = self.create_publisher(fsai_messages.msg.Status, 'status', 10)
+        self.string_pub_ = self.create_publisher(std_msgs.msg.String, 'status_message', 10)
         self.sub_ = self.create_subscription(fsai_messages.msg.Control, 'ctrl', self.__ctrl_callback, 10)
 
         self.__calibrate = Calibration()
@@ -67,8 +69,6 @@ class RcDriver(Node):
         self.declare_parameter('port', '/dev/ttyUSB0')
         self.__port = self.get_parameter('port').get_parameter_value().string_value
 
-
-
         # tf broadcast
         #self.__tfBroadcaster = tf2_ros.TransformBroadcaster(self)
         #self.__tfTimer = self.create_timer(0.05, self.__tf_callback)       
@@ -96,6 +96,10 @@ class RcDriver(Node):
             self.get_logger().info("Switching to driving mode")
             self.__as_state = fsai_messages.msg.Status.AS_DRIVING
             
+        msg = std_msgs.msg.String()
+        msg.data = f'Recieved Grossfunk signal, e-stop {"on" if request.estop else "off"}, toggle {"on" if request.toggle else "off"}'
+        self.string_pub_.publish(msg)
+
         response.success = True
         return response
 
@@ -116,6 +120,10 @@ class RcDriver(Node):
             self.__as_state = None
             self.__mission = fsai_messages.msg.Status.AMI_NOT_SELECTED
             response.pwr = False
+
+        msg = std_msgs.msg.String()
+        msg.data = f'Power signal.'
+        self.string_pub_.publish(msg)
         
         return response
 
