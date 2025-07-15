@@ -57,7 +57,8 @@ class RcDriver(Node):
 
         # convert steering angle to encoder ticks, conversion is doing using a polynomial
         # generated from the calibration data enc = [0] + ( ang * [1] ) + ( ang * [2]**2 ) + ( ang * [3]**3 )
-        self.__steerpoly = (2.252428829, 3001.47924, 465.8237052, 7981.656532)
+        self.__steerpoly = (13.7516546452847, 2997.25761024864, 340.448106198361, 7981.65853192909)
+                            #(2.252428829, 3001.47924, 465.8237052, 7981.656532)
 
         # create services
         self.create_service(fsai_messages.srv.Mission, '~/mission', self.__mission_callback)
